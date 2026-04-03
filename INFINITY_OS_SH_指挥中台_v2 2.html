@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>INFINITY OS-SH · 指挥中台</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#07090c; --s1:#0a0d12; --s2:#0e1318; --s3:#141b24;
+  --border:#1a2430; --border2:#243040;
+  --gold:#c9a227; --gold-d:rgba(201,162,39,0.1);
+  --cyan:#00c9b1; --cyan-d:rgba(0,201,177,0.1);
+  --red:#e05a3a; --red-d:rgba(224,90,58,0.1);
+  --blue:#4a9eff;
+  --text:#a8bfcc; --text2:#5a7a8a; --white:#dce8f0;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; overflow:hidden; }
+body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; display:flex; flex-direction:column; }
+
+/* ── TOP BAR ── */
+.topbar {
+  background:var(--s1);
+  border-bottom:1px solid var(--border);
+  padding:0 16px;
+  height:50px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-shrink:0;
+  z-index:20;
+}
+.logo-pulse { width:7px; height:7px; border-radius:50%; background:var(--gold); animation:blink 2s infinite; flex-shrink:0; }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.logo-name { font-family:'DM Serif Display',serif; font-size:17px; color:var(--white); letter-spacing:0.02em; }
+.logo-sub { font-size:9px; color:var(--text2); letter-spacing:0.1em; }
+.topbar-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.upload-btn {
+  font-size:10px; color:var(--text2);
+  border:1px solid var(--border2);
+  padding:5px 12px; border-radius:8px;
+  cursor:pointer; transition:all .15s;
+  letter-spacing:0.05em;
+}
+.upload-btn:hover,.upload-btn.loaded { color:var(--cyan); border-color:rgba(0,201,177,0.3); }
+#fileInput { display:none; }
+
+/* ── TAB BAR ── */
+.tabbar {
+  background:var(--s1);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  flex-shrink:0;
+  overflow-x:auto;
+}
+.tabbar::-webkit-scrollbar { display:none; }
+.tab {
+  flex:1; min-width:80px;
+  padding:10px 8px;
+  text-align:center;
+  font-size:10px;
+  color:var(--text2);
+  cursor:pointer;
+  border-bottom:2px solid transparent;
+  transition:all .15s;
+  white-space:nowrap;
+  letter-spacing:0.05em;
+}
+.tab .tab-icon { font-size:14px; display:block; margin-bottom:3px; }
+.tab.active { color:var(--gold); border-bottom-color:var(--gold); background:var(--gold-d); }
+.tab.active.t-cyan { color:var(--cyan); border-bottom-color:var(--cyan); background:var(--cyan-d); }
+.tab.active.t-red { color:var(--red); border-bottom-color:var(--red); background:var(--red-d); }
+.tab.active.t-blue { color:var(--blue); border-bottom-color:var(--blue); background:rgba(74,158,255,0.08); }
+
+/* ── PANELS ── */
+.panels { flex:1; overflow:hidden; position:relative; }
+.panel { position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; visibility:hidden; pointer-events:none; }
+.panel.active { visibility:visible; pointer-events:auto; }
+
+/* ── OVERVIEW ── */
+.overview { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }
+.ov-summary { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.sum-card { background:var(--s2); border:1px solid var(--border); border-radius:8px; padding:12px; }
+.sum-label { font-size:9px; color:var(--text2); letter-spacing:0.18em; text-transform:uppercase; margin-bottom:4px; }
+.sum-val { font-size:20px; font-weight:500; line-height:1; }
+.sum-val.r { color:var(--red); }
+.sum-val.g { color:var(--gold); }
+.sum-val.c { color:var(--cyan); }
+.sum-val.w { color:var(--white); }
+.sum-sub { font-size:9px; color:var(--text2); margin-top:3px; }
+
+.agent-cards { display:grid; grid-template-columns:1fr; gap:8px; }
+.agent-card {
+  background:var(--s2); border:1px solid var(--border);
+  border-radius:10px; padding:14px 16px;
+  cursor:pointer; transition:all .2s;
+  display:flex; align-items:center; gap:12px;
+  position:relative; overflow:hidden;
+}
+.agent-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; }
+.agent-card.hb::before { background:var(--cyan); }
+.agent-card.compass::before { background:var(--gold); }
+.agent-card.battle::before { background:var(--red); }
+.agent-card:active { transform:scale(0.99); }
+.ac-icon { font-size:22px; flex-shrink:0; }
+.ac-body { flex:1; }
+.ac-name { font-family:'DM Serif Display',serif; font-size:16px; color:var(--white); margin-bottom:2px; }
+.ac-desc { font-size:10px; color:var(--text2); line-height:1.5; }
+.ac-stats { margin-top:6px; display:flex; gap:12px; }
+.ac-stat { font-size:10px; }
+.ac-stat .v { font-weight:600; margin-left:3px; }
+.ac-stat .v.r { color:var(--red); }
+.ac-stat .v.g { color:var(--gold); }
+.ac-stat .v.c { color:var(--cyan); }
+.ac-arrow { font-size:16px; color:var(--border2); flex-shrink:0; }
+
+/* ── CHAT LAYOUT ── */
+.chat-layout { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+.chat-messages {
+  flex:1;
+  overflow-y:auto;
+  padding:12px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  -webkit-overflow-scrolling:touch;
+}
+.chat-messages::-webkit-scrollbar { width:2px; }
+.chat-messages::-webkit-scrollbar-thumb { background:var(--border2); }
+
+/* Messages */
+.msg { display:flex; gap:8px; }
+.msg.user { flex-direction:row-reverse; align-self:flex-end; max-width:88%; }
+.msg.agent { align-self:flex-start; max-width:92%; }
+
+.av {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; flex-shrink:0; margin-top:2px;
+}
+.av.hb { background:linear-gradient(135deg,#042020,#083030); border:1px solid rgba(0,201,177,0.3); }
+.av.compass { background:linear-gradient(135deg,#201408,#382808); border:1px solid rgba(201,162,39,0.3); }
+.av.battle { background:linear-gradient(135deg,#200a04,#381008); border:1px solid rgba(224,90,58,0.3); }
+.av.user { background:var(--s3); border:1px solid var(--border2); }
+
+.bub {
+  padding:9px 13px;
+  border-radius:12px;
+  font-size:12px;
+  line-height:1.7;
+  word-break:break-word;
+}
+.bub.agent {
+  background:var(--s2);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:3px 12px 12px 12px;
+}
+.bub.user {
+  background:var(--s3);
+  border:1px solid var(--border2);
+  color:var(--white);
+  border-radius:12px 3px 12px 12px;
+}
+.bub strong { color:var(--white); }
+.bub .c { color:var(--cyan); font-weight:500; }
+.bub .g { color:var(--gold); font-weight:500; }
+.bub .r { color:var(--red); font-weight:500; }
+
+/* Quick buttons */
+.quick-row {
+  padding:7px 12px;
+  display:flex; gap:6px;
+  flex-wrap:wrap;
+  flex-shrink:0;
+  border-top:1px solid var(--border);
+  background:var(--bg);
+}
+.qb {
+  font-size:10px; color:var(--text2);
+  border:1px solid var(--border);
+  background:var(--s2);
+  padding:5px 10px; border-radius:14px;
+  cursor:pointer; white-space:nowrap;
+  transition:all .15s; letter-spacing:0.04em;
+  -webkit-tap-highlight-color:transparent;
+}
+.qb:active { transform:scale(0.96); }
+.qb.hb:hover,.qb.hb:active { color:var(--cyan); border-color:rgba(0,201,177,0.4); background:var(--cyan-d); }
+.qb.compass:hover,.qb.compass:active { color:var(--gold); border-color:rgba(201,162,39,0.4); background:var(--gold-d); }
+.qb.battle:hover,.qb.battle:active { color:var(--red); border-color:rgba(224,90,58,0.4); background:var(--red-d); }
+
+/* Input area */
+.input-area {
+  padding:10px 14px;
+  background:var(--s1);
+  border-top:1px solid var(--border);
+  display:flex; gap:8px;
+  align-items:flex-end;
+  flex-shrink:0;
+}
+.input-box {
+  flex:1;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:12px;
+  padding:9px 13px;
+  transition:border-color .2s;
+  min-height:38px;
+  display:flex; align-items:center;
+}
+.input-box.hb:focus-within { border-color:rgba(0,201,177,0.5); }
+.input-box.compass:focus-within { border-color:rgba(201,162,39,0.5); }
+.input-box.battle:focus-within { border-color:rgba(224,90,58,0.5); }
+.input-box textarea {
+  width:100%; background:none; border:none; outline:none;
+  color:var(--white); font-size:13px;
+  resize:none; line-height:1.5;
+  font-family:'DM Mono',monospace;
+  max-height:80px;
+  display:block;
+}
+.input-box textarea::placeholder { color:var(--text2); }
+
+.send-circle {
+  width:36px; height:36px;
+  border-radius:50%; border:none;
+  cursor:pointer; display:flex;
+  align-items:center; justify-content:center;
+  flex-shrink:0; transition:opacity .15s;
+}
+.send-circle:disabled { opacity:0.35; cursor:not-allowed; }
+.send-circle:active { opacity:0.8; }
+.send-circle.hb { background:linear-gradient(135deg,#008878,#00c9b1); }
+.send-circle.compass { background:linear-gradient(135deg,#907010,#c9a227); }
+.send-circle.battle { background:linear-gradient(135deg,#a03010,#e05a3a); }
+.send-circle svg { width:14px; height:14px; fill:none; stroke:#fff; stroke-width:2.5; }
+
+/* Typing */
+.typing { display:flex; gap:4px; align-items:center; padding:3px 0; }
+.typing span { width:5px; height:5px; border-radius:50%; animation:t 1.2s infinite; }
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes t{0%,60%,100%{opacity:.25;transform:scale(.8)}30%{opacity:1;transform:scale(1)}}
+.t-hb span { background:var(--cyan); }
+.t-compass span { background:var(--gold); }
+.t-battle span { background:var(--red); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo-pulse"></div>
+  <div>
+    <div class="logo-name">INFINITY OS-SH</div>
+    <div class="logo-sub">指挥中台 · 上海样板城市</div>
+  </div>
+  <div class="topbar-right">
+    <div class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">📊 上传HB数据</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFile(this.files[0])">
+  </div>
+</div>
+
+<!-- TAB BAR -->
+<div class="tabbar">
+  <div class="tab active" id="tab-overview" onclick="switchTab('overview')">
+    <span class="tab-icon">⬡</span>总览
+  </div>
+  <div class="tab t-cyan" id="tab-hb" onclick="switchTab('hb')">
+    <span class="tab-icon">💓</span>HB监控
+  </div>
+  <div class="tab t-gold" id="tab-compass" onclick="switchTab('compass')">
+    <span class="tab-icon">🎯</span>增长罗盘
+  </div>
+  <div class="tab t-red" id="tab-battle" onclick="switchTab('battle')">
+    <span class="tab-icon">⚔️</span>战役触发
+  </div>
+</div>
+
+<!-- PANELS -->
+<div class="panels">
+
+  <!-- OVERVIEW -->
+  <div class="panel active" id="panel-overview">
+    <div class="overview">
+      <div class="ov-summary">
+        <div class="sum-card">
+          <div class="sum-label">极危险</div>
+          <div class="sum-val r" id="ov-critical">—</div>
+          <div class="sum-sub">库存&lt;1天</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">平均达成</div>
+          <div class="sum-val r" id="ov-rate">—</div>
+          <div class="sum-sub">主因断货</div>
+        </div>
+        <div class="sum-card">
+          <div class="sum-label">推荐战役</div>
+          <div class="sum-val g">S13</div>
+          <div class="sum-sub">朋友来家吃饭</div>
+        </div>
+      </div>
+
+      <div class="agent-cards">
+        <div class="agent-card hb" onclick="switchTab('hb')">
+          <div class="ac-icon">💓</div>
+          <div class="ac-body">
+            <div class="ac-name">HB 监控 Agent</div>
+            <div class="ac-desc">库存心跳实时监控 · AIO无菜单补货 · 失真检测</div>
+            <div class="ac-stats">
+              <div class="ac-stat">极危险<span class="v r" id="ac-critical">上传数据</span></div>
+              <div class="ac-stat">冠军店<span class="v c">凉城241%</span></div>
+            </div>
+          </div>
+          <div class="ac-arrow">›</div>
+        </div>
+
+        <div class="agent-card compass" onclick="switchTab('compass')">
+          <div class="ac-icon">🎯</div>
+          <div class="ac-body">
+            <div class="ac-name">增长罗盘 Agent</div>
+            <div class="ac-desc">Uber即时激励 · 四齿轮积分 · 实时收入预测</div>
+            <div class="ac-stats">
+              <div class="ac-stat">本月积分<span class="v g">1,240分</span></div>
+              <div class="ac-stat">预计收入<span class="v g">¥12,400</span></div>
+            </div>
+          </div>
+          <div class="ac-arrow">›</div>
+        </div>
+
+        <div class="agent-card battle" onclick="switchTab('battle')">
+          <div class="ac-icon">⚔️</div>
+          <div class="ac-body">
+            <div class="ac-name">战役触发 Agent</div>
+            <div class="ac-desc">场景信号识别 · 三把钥匙评估 · 战役简报生成</div>
+            <div class="ac-stats">
+              <div class="ac-stat">清明<span class="v r">5天后</span></div>
+              <div class="ac-stat">推荐<span class="v r">S13战役</span></div>
+            </div>
+          </div>
+          <div class="ac-arrow">›</div>
+        </div>
+      </div>
+
+      <div style="background:linear-gradient(135deg,rgba(201,162,39,0.07),rgba(201,162,39,0.02));border:1px solid rgba(201,162,39,0.2);border-radius:10px;padding:14px 16px;">
+        <div style="font-size:9px;color:var(--gold);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:8px">系统状态</div>
+        <div style="font-size:11px;color:var(--text2);line-height:2">
+          <span style="color:var(--cyan)">●</span> HB Agent v2.0 · 上传Excel自动解析<br>
+          <span style="color:var(--gold)">●</span> 增长罗盘 · 四层人员激励已就绪<br>
+          <span style="color:var(--red)">●</span> 战役触发 · 28个场景母库已加载<br>
+          <span style="color:var(--border2)">●</span> 数据管道 · M3自动化建设中
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HB PANEL -->
+  <div class="panel" id="panel-hb">
+    <div class="chat-layout">
+      <div class="chat-messages" id="chat-hb"></div>
+      <div class="quick-row">
+        <button class="qb hb" onclick="sq('hb','今日最紧急的门店是哪几家？')">🚨 今日最紧急</button>
+        <button class="qb hb" onclick="sq('hb','所有门店库存总览')">📊 库存总览</button>
+        <button class="qb hb" onclick="sq('hb','生成今日AIO补货指令')">📦 AIO补货指令</button>
+        <button class="qb hb" onclick="sq('hb','哪些门店有失真信号？')">⚠️ 失真检测</button>
+        <button class="qb hb" onclick="sq('hb','为什么凉城生鲜达成241%？')">🏆 凉城分析</button>
+      </div>
+      <div class="input-area">
+        <div class="input-box hb">
+          <textarea id="in-hb" rows="1" placeholder="问HB Agent：补货指令、库存状态、失真检测..."
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSend('hb')}"
+            oninput="autoResize(this)"></textarea>
+        </div>
+        <button class="send-circle hb" id="btn-hb" onclick="doSend('hb')">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPASS PANEL -->
+  <div class="panel" id="panel-compass">
+    <div class="chat-layout">
+      <div class="chat-messages" id="chat-compass"></div>
+      <div class="quick-row">
+        <button class="qb compass" onclick="sq('compass','我今天完成了哪些任务？积分多少？')">📊 今日积分</button>
+        <button class="qb compass" onclick="sq('compass','我现在预计月收入是多少？')">💰 预计收入</button>
+        <button class="qb compass" onclick="sq('compass','今天还有哪些任务可以提高积分？')">⚡ 今日任务</button>
+        <button class="qb compass" onclick="sq('compass','本月团队积分排行榜')">🏆 团队排行</button>
+        <button class="qb compass" onclick="sq('compass','经销商的激励机制是什么？')">🤝 经销商激励</button>
+      </div>
+      <div class="input-area">
+        <div class="input-box compass">
+          <textarea id="in-compass" rows="1" placeholder="问增长罗盘：积分规则、收入预测、团队排行..."
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSend('compass')}"
+            oninput="autoResize(this)"></textarea>
+        </div>
+        <button class="send-circle compass" id="btn-compass" onclick="doSend('compass')">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BATTLE PANEL -->
+  <div class="panel" id="panel-battle">
+    <div class="chat-layout">
+      <div class="chat-messages" id="chat-battle"></div>
+      <div class="quick-row">
+        <button class="qb battle" onclick="sq('battle','现在应该打哪个战役？')">⚔️ 现在打哪个</button>
+        <button class="qb battle" onclick="sq('battle','帮我评估S13三把钥匙是否具备？')">🔑 三把钥匙</button>
+        <button class="qb battle" onclick="sq('battle','生成S13朋友来家里吃饭的完整战役简报')">📋 战役简报</button>
+        <button class="qb battle" onclick="sq('battle','今天3月底，接下来两个月战役节奏怎么排？')">📅 战役节奏</button>
+        <button class="qb battle" onclick="sq('battle','凉城生鲜241%是战役机会吗？')">🔍 信号解读</button>
+      </div>
+      <div class="input-area">
+        <div class="input-box battle">
+          <textarea id="in-battle" rows="1" placeholder="问战役Agent：场景信号、战役评估、战役简报..."
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doSend('battle')}"
+            oninput="autoResize(this)"></textarea>
+        </div>
+        <button class="send-circle battle" id="btn-battle" onclick="doSend('battle')">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────
+let hbData = [];
+const hist = { hb:[], compass:[], battle:[] };
+
+// ── TAB SWITCH ────────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  document.getElementById('panel-' + id).classList.add('active');
+  // Scroll to bottom of chat when switching
+  if (id !== 'overview') {
+    setTimeout(() => {
+      const c = document.getElementById('chat-' + id);
+      if (c) c.scrollTop = c.scrollHeight;
+    }, 50);
+  }
+}
+
+// ── FILE UPLOAD ───────────────────────────────────────────────
+function handleFile(file) {
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      parseHB(raw, file.name);
+    } catch(err) {
+      addMsg('hb','agent','⚠️ 解析失败：' + err.message);
+      switchTab('hb');
+    }
+  };
+  r.readAsBinaryString(file);
+}
+
+function parseHB(raw, fname) {
+  const stores = [];
+  for (let i = 3; i < raw.length; i++) {
+    const row = raw[i];
+    const name = String(row[0]||'').trim();
+    if (!name || name==='NaN') continue;
+    const a1 = parseFloat(row[11])||0;
+    const inv = parseFloat(row[18])||0;
+    const r1 = a1>0 ? Math.round(a1/30*10)/10 : 0;
+    const daysLeft = r1>0 ? Math.round(inv/r1*10)/10 : 99;
+    const salesRate = a1>0 ? (parseFloat(row[10])||0)/a1 : 0;
+    if (a1>0) stores.push({
+      name, inv, a1, r1, daysLeft, salesRate,
+      status: daysLeft<2?'critical':daysLeft<7?'warning':'healthy',
+      distributor: String(row[8]||'')
+    });
+  }
+  if (stores.length > 0) {
+    hbData = stores;
+    updateOverview();
+    document.getElementById('uploadBtn').textContent = '✓ ' + stores.length + '家门店';
+    document.getElementById('uploadBtn').classList.add('loaded');
+    const critical = stores.filter(s=>s.status==='critical').length;
+    addMsg('hb','agent',
+      '<strong>HB数据已加载：' + fname + '</strong><br><br>' +
+      '共解析 <span class="c">' + stores.length + ' 家门店</span>，完成r值/a值/水位计算。<br><br>' +
+      '<span class="r">⚠️ ' + critical + ' 家门店库存极度危险（不足1天）</span><br><br>' +
+      '最危险：' + stores.sort((a,b)=>a.daysLeft-b.daysLeft).slice(0,3).map(s=>`<span class="r">${s.name}（${s.daysLeft}天）</span>`).join('、') + '<br><br>' +
+      '🏆 销量冠军：' + [...stores].sort((a,b)=>b.salesRate-a.salesRate)[0]?.name + '（' + (([...stores].sort((a,b)=>b.salesRate-a.salesRate)[0]?.salesRate||0)*100).toFixed(0) + '%达成）<br><br>' +
+      '直接问我任何问题，或点击快捷按钮。'
+    );
+    switchTab('hb');
+  }
+}
+
+function updateOverview() {
+  const critical = hbData.filter(s=>s.status==='critical').length;
+  const avgRate = hbData.length > 0 ? hbData.reduce((a,b)=>a+b.salesRate,0)/hbData.length : 0;
+  document.getElementById('ov-critical').textContent = critical + '家';
+  document.getElementById('ov-rate').textContent = (avgRate*100).toFixed(0) + '%';
+  document.getElementById('ac-critical').textContent = critical + '家';
+}
+
+// ── SYSTEM PROMPTS ────────────────────────────────────────────
+function getSys(agent) {
+  if (agent === 'hb') {
+    const info = hbData.length > 0
+      ? hbData.map(s=>`${s.name}：r₁=${s.r1}瓶/天，库存${s.inv}瓶，a₁=${s.a1.toFixed(0)}，2A=${(s.a1*2).toFixed(0)}，3A=${(s.a1*3).toFixed(0)}，剩余${s.daysLeft}天，达成${(s.salesRate*100).toFixed(0)}%，${s.status==='critical'?'🔴极危险':s.status==='warning'?'🟡预警':'✅健康'}，经销商：${s.distributor}`).join('\n')
+      : '尚未加载HB数据。根据已知情况：上海11家旗舰店整体断货严重，越盛市集0.4天、满宜购武威0.7天、满宜购大林0.9天等极危险。凉城生鲜达成241%是唯一亮点。';
+    return `你是INFINITY OS-SH的HB（库存心跳）监控Agent。核心算法：a=周期内销量，r=a÷T（日销率），健康范围[2a,3a]，补货量=3a-当前库存。失真检测：A压货/B促销/C窜货。\n\n当前上海门店数据：\n${info}\n\n直接给数字和指令，简洁有力，中文回答。`;
+  }
+  if (agent === 'compass') {
+    return `你是INFINITY OS-SH增长罗盘Agent。Uber即时激励，四齿轮：业绩轮40%/健康轮30%/系统轮20%/成长轮10%。收入=基薪+基薪×(积分/3000)×系数×0.5。业务员基薪8000系数1.0；城市经理15000系数1.5；中台20000系数2.0。P0补货+300分，P1+200分，陈列达标+120分，新客入会+80分，复购+150分，数据上报+50分，主动预警+200分。经销商用账期/返利/区域保护激励（不用积分）。直接给数字，中文简洁。`;
+  }
+  if (agent === 'battle') {
+    return `你是INFINITY OS-SH战役触发Agent。三把钥匙：①场景CB≥18+信号强 ②资源到位 ③目标清晰。场景母库核心：S01年夜饭CB24/S21新手CB22/S13朋友来家CB21/S08孩子便当CB21/S23亲子CB21/S07周五晚餐CB20/S17低钠CB20。今日：2026年3月31日，清明5天后，五一31天后。热点信号：凉城生鲜达成241%（有货就能卖的系统证明）。战役简报必须包含：战役名称、场景ID、级别、目标用户、核心情绪、主攻棒次、时间窗口、成功KPI×3、退出条件×3、今日第一步行动。直接、精准、中文简洁。`;
+  }
+  return '';
+}
+
+// ── CHAT ─────────────────────────────────────────────────────
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 80) + 'px';
+}
+
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmt(t) { return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>'); }
+
+const AV = { hb:'💓', compass:'🎯', battle:'⚔️' };
+const T_CLS = { hb:'t-hb', compass:'t-compass', battle:'t-battle' };
+
+function addMsg(agent, role, content) {
+  const chat = document.getElementById('chat-' + agent);
+  if (!chat) return;
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  const av = document.createElement('div');
+  av.className = 'av ' + (role==='user' ? 'user' : agent);
+  av.textContent = role==='user' ? '👤' : AV[agent];
+  const bub = document.createElement('div');
+  bub.className = 'bub ' + role;
+  bub.innerHTML = role==='user' ? esc(content) : fmt(content);
+  div.appendChild(av);
+  div.appendChild(bub);
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addTyping(agent) {
+  const chat = document.getElementById('chat-' + agent);
+  const div = document.createElement('div');
+  div.className = 'msg agent'; div.id = 'typing-' + agent;
+  const av = document.createElement('div'); av.className = 'av ' + agent; av.textContent = AV[agent];
+  const bub = document.createElement('div'); bub.className = 'bub agent';
+  bub.innerHTML = '<div class="typing ' + T_CLS[agent] + '"><span></span><span></span><span></span></div>';
+  div.appendChild(av); div.appendChild(bub);
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function removeTyping(agent) {
+  const el = document.getElementById('typing-' + agent);
+  if (el) el.remove();
+}
+
+async function doSend(agent) {
+  const inp = document.getElementById('in-' + agent);
+  const text = inp.value.trim();
+  if (!text) return;
+  const btn = document.getElementById('btn-' + agent);
+  btn.disabled = true;
+  inp.value = ''; inp.style.height = 'auto';
+  addMsg(agent, 'user', text);
+  hist[agent].push({ role:'user', content:text });
+  addTyping(agent);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system: getSys(agent),
+        messages: hist[agent]
+      })
+    });
+    const data = await res.json();
+    removeTyping(agent);
+    if (data.content?.[0]) {
+      const reply = data.content[0].text;
+      hist[agent].push({ role:'assistant', content:reply });
+      addMsg(agent, 'agent', reply);
+    } else {
+      addMsg(agent, 'agent', '系统暂时无法响应，请稍后重试。');
+    }
+  } catch(err) {
+    removeTyping(agent);
+    addMsg(agent, 'agent', '连接错误：' + err.message);
+  }
+  btn.disabled = false;
+  inp.focus();
+}
+
+function sq(agent, text) {
+  switchTab(agent);
+  setTimeout(() => {
+    document.getElementById('in-' + agent).value = text;
+    doSend(agent);
+  }, 100);
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+function init() {
+  addMsg('hb','agent',
+    '<strong>HB 监控 Agent 已就绪。</strong><br><br>' +
+    '点击顶部「上传HB数据」，上传Cube系统导出的Excel，Agent自动计算所有门店的心跳指标。<br><br>' +
+    '已知上海旗舰店情况：<br>' +
+    '<span class="r">越盛市集 0.4天 · 满宜购武威 0.7天 · 6家门店极危险</span><br>' +
+    '🏆 凉城生鲜达成 <span class="c">241%</span> — 有货就能卖的最佳证明<br><br>' +
+    '直接问我任何问题。'
+  );
+  addMsg('compass','agent',
+    '<strong>增长罗盘 Agent 已就绪。</strong><br><br>' +
+    'Uber即时激励 · 四层人员全覆盖<br><br>' +
+    '本月当前状态：<br>' +
+    '累计积分 <span class="g">1,240分</span> · 预计月收入 <span class="g">¥12,400</span><br>' +
+    '团队排名 <span class="g">#3 / 18人</span><br><br>' +
+    '完成P0补货指令 → 即时 <span class="g">+300分</span><br>' +
+    '引导消费者扫码入会 → 即时 <span class="g">+80分</span><br><br>' +
+    '问我：积分规则、收入预测、团队排行、经销商激励。'
+  );
+  addMsg('battle','agent',
+    '<strong>战役触发 Agent 已就绪。</strong><br><br>' +
+    '今天：2026年3月31日 · <span class="r">清明节5天后</span> · 五一31天后<br><br>' +
+    '当前最强信号：<br>' +
+    '<span class="r">🔥 凉城生鲜达成241%</span> — 这是系统级证明：有库存就有销量。<br><br>' +
+    '推荐立即打：<span class="g">S13「朋友来家里吃饭」</span>（CB 21分，A级战役，常青场景）<br><br>' +
+    '三个功能随时可用：<br>' +
+    '判断该打哪个 · 评估三把钥匙 · 生成完整战役简报'
+  );
+}
+
+init();
+</script>
+</body>
+</html>
